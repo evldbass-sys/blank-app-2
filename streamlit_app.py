@@ -9,10 +9,10 @@ from streamlit_autorefresh import st_autorefresh
 PROJECT_ID = "volt-a-value" 
 FIRESTORE_URL = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents"
 
-# Široké rozvržení, ale s povoleným bočním panelem na přepínání (collapsed/auto schování na mobilech)
+# Široké rozvržení, boční panel necháváme plně funkční pro přepínání rolí
 st.set_page_config(page_title="Lieferdienst Management System", layout="wide", initial_sidebar_state="auto")
 
-# Moderní CSS úprava pro čistější gastro rozhraní
+# Moderní CSS úprava pro čistější vzhled
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;}
@@ -41,10 +41,12 @@ def naechste_bestellnummer_holen():
                             max_nr = nr
                     except:
                         pass
-    naechste = max_nr + 1
-    if naechste > 9999:
-        naechste = 1
-    return naechste
+        naechste = max_nr + 1
+        if naechste > 9999:
+            naechste = 1
+        return naechste
+    except:
+        return 1
 
 def bestellung_speichern(daten):
     url = f"{FIRESTORE_URL}/objednavky"
@@ -76,7 +78,7 @@ def alle_bestellungen_loeschen():
     for d in docs:
         requests.delete(f"https://firestore.googleapis.com/v1/{d['name']}")
 
-# ====== NAVIGATION (TVOJE KLASICKÉ PŘEPÍNÁNÍ NA BOKU) ======
+# ====== NAVIGATION VIA SIDEBAR ======
 rolle = st.sidebar.radio("Bereich auswählen:", [
     "🏠 1. Kunden-Ansicht (Bestellung von zu Hause)", 
     "🏬 2. Kassa / Eingabe (Theke)",
@@ -128,13 +130,12 @@ extra_options = {
     "Mayo (+0.50 €)": 0.50
 }
 
-# ====== NOVÝ DESIGN GASTRO GRIDU PRO ZÁKAZNÍKA ======
 def rendering_menue_grid(aktive_rest, session_key):
     aktuelle_speisekarte = restaurants_menue[aktive_rest]
     kategorien = list(set(info["kat"] for info in aktuelle_speisekarte.values()))
     
     for kat in sorted(kategorien):
-        st.markdown(f"#### 📦 {kat}")
+        st.markdown(f"#### ++ {kat} ++")
         items = [item for item in aktuelle_speisekarte.items() if item[1]["kat"] == kat]
         for i in range(0, len(items), 3):
             cols = st.columns(3)
@@ -147,9 +148,8 @@ def rendering_menue_grid(aktive_rest, session_key):
                                 st.image(info["bild"], use_container_width=True)
                                 
                             st.markdown(f"**{info['icon']} {artikel}**")
-                            # Přidáno zobrazení detailu jídla pro hezčí vzhled
                             st.caption(info.get("info", ""))
-                            st.markdown(f"Cena: **{info['preis']:.2f} €**")
+                            st.markdown(f"Price: {info['preis']:.2f} €")
                             
                             selected_extras = []
                             extra_cost = 0.0
@@ -169,7 +169,7 @@ def rendering_menue_grid(aktive_rest, session_key):
                                 final_preis = info["preis"] + extra_cost
                                 st.session_state[f"{session_key}_liste"].append({"name": název_polozky, "preis": final_preis})
                                 st.success("Hinzugefügt!")
-                                time.sleep(0.1)
+                                time.sleep(0.2)
                                 st.rerun()
 
 if "kunden_korb_liste" not in st.session_state: st.session_state.kunden_korb_liste = []
@@ -178,13 +178,10 @@ if "gewaehltes_rest_kunde" not in st.session_state: st.session_state.gewaehltes_
 if "gewaehltes_rest_kassa" not in st.session_state: st.session_state.gewaehltes_rest_kassa = "Smash Brothers"
 if "aktiver_korb_rest" not in st.session_state: st.session_state.aktiver_korb_rest = None
 
-# ====== 1. KUNDEN-ANSICHT (SUPER GASTRO DESIGN) ======
+# ====== 1. KUNDEN-ANSICHT (SUPER GASTRO DESIGN VEDLE SEBE) ======
 if rolle == "🏠 1. Kunden-Ansicht (Bestellung von zu Hause)":
-    st.title("🍔 Volt and value - Lieferdienst Steyr")
-    st.markdown("##### Expresní rozvoz z nejoblíbenějších lokálních restaurací")
-    st.write("")
+    st.header("🚚 Online-Bestellung – Restaurant wählen")
     
-    st.markdown("### 🏪 Vyberte si restauraci:")
     c_rest1, c_rest2 = st.columns(2)
     with c_rest1:
         if st.button("🍔 SMASH BROTHERS", use_container_width=True, type="primary" if st.session_state.gewaehltes_rest_kunde == "Smash Brothers" else "secondary"):
@@ -222,23 +219,23 @@ if rolle == "🏠 1. Kunden-Ansicht (Bestellung von zu Hause)":
     if st.session_state.gewaehltes_rest_kunde is None:
         st.info("Bitte wählen Sie oben ein Restaurant aus.")
     else:
-        # SUPER VZHLED: Rozdělení obrazovky 2:1 (Nabídka vs Čistý Pokladní košík napravo)
+        # Tady děláme to přehledné rozdělení: 2 díly menu, 1 díl košík vpravo
         col1, col2 = st.columns([2, 1])
         
         with col1:
-            st.subheader(f"📋 Nabídka podniku: {st.session_state.gewaehltes_rest_kunde}")
+            st.subheader(f"Speisekarte von: {st.session_state.gewaehltes_rest_kunde}")
             l_vorher = len(st.session_state.kunden_korb_liste)
             rendering_menue_grid(st.session_state.gewaehltes_rest_kunde, "kunden_korb")
             if len(st.session_state.kunden_korb_liste) > l_vorher:
                 st.session_state.aktiver_korb_rest = st.session_state.gewaehltes_rest_kunde
 
         with col2:
-            st.subheader("🛒 Váš nákupní košík")
+            st.subheader("📋 Meine Bestellung")
             gesamtsumme = 0.0
             artikel_strings = []
             
             if not st.session_state.kunden_korb_liste:
-                st.info("Dein Warenkorb ist leer. Klikněte na ➕ u jídla.")
+                st.info("Dein Warenkorb ist leer.")
             else:
                 st.caption(f"Bestellung von: {st.session_state.aktiver_korb_rest}")
                 for idx, item in enumerate(st.session_state.kunden_korb_liste):
@@ -252,20 +249,12 @@ if rolle == "🏠 1. Kunden-Ansicht (Bestellung von zu Hause)":
                     st.rerun()
                     
             st.write("---")
-            doprava = 3.90 if st.session_state.kunden_korb_liste else 0.0
-            celkem = gesamtsumme + doprava
-            
-            st.text(f"Jídlo: {gesamtsumme:.2f} €")
-            st.text(f"Doprava (Liefergebühr): {doprava:.2f} €")
-            st.markdown(f"### **Celkem k platbě: {celkem:.2f} €**")
-            
-            st.write("---")
-            st.markdown("#### 📍 Údaje pro doručení")
+            st.metric("Gesamtsumme", f"{gesamtsumme:.2f} €")
+            k_trinkgeld = st.number_input("Trinkgeld für den Fahrer (€)", min_value=0.0, max_value=20.0, value=0.0, step=0.5, key="k_trinkgeld")
             k_name = st.text_input("Name", "Max Mustermann", key="k_name")
-            k_telefon = st.text_input("Telefonnummer", "+43 ", key="k_tel")
+            k_telefon = st.text_input("Telefonnummer", "+43 660 1234567", key="k_tel")
             k_adresse = st.text_input("Lieferadresse", "Hauptstraße 12, Steyr", key="k_adr")
             k_zahlung = st.selectbox("Zahlungsart", ["Online-Karte", "Barzahlung"], key="k_zahl")
-            k_trinkgeld = st.number_input("Trinkgeld für den Fahrer (€)", min_value=0.0, max_value=20.0, value=0.0, step=0.5, key="k_trinkgeld")
             
             if st.session_state.kunden_korb_liste:
                 if st.button("🚀 BESTELLUNG ABSENDEN", type="primary", use_container_width=True):
@@ -286,12 +275,12 @@ if rolle == "🏠 1. Kunden-Ansicht (Bestellung von zu Hause)":
                     st.session_state.aktiver_korb_rest = None
                     st.balloons()
                     st.success("🎉 Abgesendet!")
-                    time.sleep(1)
                     st.rerun()
 
-# ====== 2. KASSA / EINGABE ======
+# ====== 2. KASSA / EINGABE (AUTOREFRESH 5 VTEŘIN) ======
 elif rolle == "🏬 2. Kassa / Eingabe (Theke)":
     st_autorefresh(interval=5 * 1000, key="kassa_autorefresh")
+    
     st.header("🏬 Kassa & Auftragsannahme")
     docs = bestellungen_laden()
     
@@ -401,9 +390,10 @@ elif rolle == "🏬 2. Kassa / Eingabe (Theke)":
         alle_bestellungen_loeschen()
         st.rerun()
 
-# ====== 3. KÜCHE MONITOR ======
+# ====== 3. KÜCHE MONITOR (AUTOREFRESH 5 VTEŘIN) ======
 elif rolle == "👨‍🍳 3. Küche Monitor":
     st_autorefresh(interval=5 * 1000, key="kueche_autorefresh")
+    
     st.header("👨‍🍳 Monitor v kuchyni (Küche Monitor)")
     docs = bestellungen_laden()
     offene_kueche = False
@@ -459,9 +449,10 @@ elif rolle == "👨‍🍳 3. Küche Monitor":
     if not offene_kueche:
         st.info("Aktuell keine Bestellungen in der Küche. Gute Arbeit! ✨")
 
-# ====== 4. FAHRER-ANSICHT ======
+# ====== 4. FAHRER-ANSICHT (AUTOREFRESH 5 VTEŘIN) ======
 elif rolle == "🚗 4. Fahrer-Ansicht (Mobil & Finanzen)":
     st_autorefresh(interval=5 * 1000, key="fahrer_autorefresh")
+    
     st.header("Kurier-App (Unterwegs)")
     fahrer_name = "Petr (Auto)"
     
@@ -486,12 +477,12 @@ elif rolle == "🚗 4. Fahrer-Ansicht (Mobil & Finanzen)":
             time.sleep(1)
             st.rerun()
     else:
-        st.subheader("Aktuální zakázky v mé pipeline")
+        st.subheader("Aktuelle Aufträge in der Pipeline")
         docs = bestellungen_laden()
         aktive_auftraege = []
         for d in docs:
             try:
-                if d["fields"]["kuryr"]["stringValue"] == f真实fahrer_name and d["fields"]["stav"]["stringValue"] in ["In Zubereitung (Küche)", "Ready for Pick-up", "Auf dem Weg zum Kunden"]:
+                if d["fields"]["kuryr"]["stringValue"] == fahrer_name and d["fields"]["stav"]["stringValue"] in ["In Zubereitung (Küche)", "Ready for Pick-up", "Auf dem Weg zum Kunden"]:
                     aktive_auftraege.append(d)
             except:
                 pass
