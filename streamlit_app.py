@@ -3,17 +3,16 @@ import requests
 import json
 import time
 from datetime import datetime
-# Importujeme auto-refresh knihovnu
 from streamlit_autorefresh import st_autorefresh
 
 # ====== FIREBASE SETTINGS ======
 PROJECT_ID = "volt-a-value" 
 FIRESTORE_URL = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents"
 
-# Široké rozvržení, boční panel necháváme na automatické schovávání/zobrazení podle displeje
+# Široké rozvržení, boční panel necháváme plně funkční pro přepínání rolí
 st.set_page_config(page_title="Lieferdienst Management System", layout="wide", initial_sidebar_state="auto")
 
-# Moderní CSS úprava pro čistější vzhled gastro aplikací
+# Moderní CSS úprava pro čistější vzhled
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;}
@@ -79,7 +78,7 @@ def alle_bestellungen_loeschen():
     for d in docs:
         requests.delete(f"https://firestore.googleapis.com/v1/{d['name']}")
 
-# ====== NAVIGATION (TVOJE PŮVODNÍ TLAČÍTKO NA BOKU) ======
+# ====== NAVIGATION VIA SIDEBAR ======
 rolle = st.sidebar.radio("Bereich auswählen:", [
     "🏠 1. Kunden-Ansicht (Bestellung von zu Hause)", 
     "🏬 2. Kassa / Eingabe (Theke)",
@@ -87,7 +86,7 @@ rolle = st.sidebar.radio("Bereich auswählen:", [
     "🚗 4. Fahrer-Ansicht (Mobil & Finanzen)"
 ])
 
-# ====== MULTI-RESTAURANT MENUE STRUCTURE VČETNĚ DETALNÍCH POPISKŮ ======
+# ====== MULTI-RESTAURANT MENUE STRUCTURE ======
 url_burger = "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500&auto=format&fit=crop&q=60"
 url_chicken = "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=500&auto=format&fit=crop&q=60"
 url_wrap = "https://images.unsplash.com/photo-1626700051175-6518c4793f4f?w=500&auto=format&fit=crop&q=60"
@@ -131,7 +130,6 @@ extra_options = {
     "Mayo (+0.50 €)": 0.50
 }
 
-# ====== DESIGN GASTRO GRIDU PRO ZÁKAZNÍKA ======
 def rendering_menue_grid(aktive_rest, session_key):
     aktuelle_speisekarte = restaurants_menue[aktive_rest]
     kategorien = list(set(info["kat"] for info in aktuelle_speisekarte.values()))
@@ -221,7 +219,7 @@ if rolle == "🏠 1. Kunden-Ansicht (Bestellung von zu Hause)":
     if st.session_state.gewaehltes_rest_kunde is None:
         st.info("Bitte wählen Sie oben ein Restaurant aus.")
     else:
-        # PŘEHLEDNÉ ROZDĚLENÍ OBRAZOVKY: 2 díly speisekarte, 1 díl košík vpravo
+        # Tady děláme to přehledné rozdělení: 2 díly menu, 1 díl košík vpravo
         col1, col2 = st.columns([2, 1])
         
         with col1:
@@ -392,9 +390,10 @@ elif rolle == "🏬 2. Kassa / Eingabe (Theke)":
         alle_bestellungen_loeschen()
         st.rerun()
 
-# ====== 3. KÜCHE MONITOR ======
+# ====== 3. KÜCHE MONITOR (AUTOREFRESH 5 VTEŘIN) ======
 elif rolle == "👨‍🍳 3. Küche Monitor":
     st_autorefresh(interval=5 * 1000, key="kueche_autorefresh")
+    
     st.header("👨‍🍳 Monitor v kuchyni (Küche Monitor)")
     docs = bestellungen_laden()
     offene_kueche = False
@@ -450,9 +449,10 @@ elif rolle == "👨‍🍳 3. Küche Monitor":
     if not offene_kueche:
         st.info("Aktuell keine Bestellungen in der Küche. Gute Arbeit! ✨")
 
-# ====== 4. FAHRER-ANSICHT ======
+# ====== 4. FAHRER-ANSICHT (AUTOREFRESH 5 VTEŘIN) ======
 elif rolle == "🚗 4. Fahrer-Ansicht (Mobil & Finanzen)":
     st_autorefresh(interval=5 * 1000, key="fahrer_autorefresh")
+    
     st.header("Kurier-App (Unterwegs)")
     fahrer_name = "Petr (Auto)"
     
@@ -477,12 +477,12 @@ elif rolle == "🚗 4. Fahrer-Ansicht (Mobil & Finanzen)":
             time.sleep(1)
             st.rerun()
     else:
-        st.subheader("Aktuální zakázky v mé pipeline")
+        st.subheader("Aktuelle Aufträge in der Pipeline")
         docs = bestellungen_laden()
         aktive_auftraege = []
         for d in docs:
             try:
-                if d["fields"]["kuryr"]["stringValue"] == ffahrer_name and d["fields"]["stav"]["stringValue"] in ["In Zubereitung (Küche)", "Ready for Pick-up", "Auf dem Weg zum Kunden"]:
+                if d["fields"]["kuryr"]["stringValue"] == fahrer_name and d["fields"]["stav"]["stringValue"] in ["In Zubereitung (Küche)", "Ready for Pick-up", "Auf dem Weg zum Kunden"]:
                     aktive_auftraege.append(d)
             except:
                 pass
@@ -519,6 +519,7 @@ elif rolle == "🚗 4. Fahrer-Ansicht (Mobil & Finanzen)":
                     
                     if status == "In Zubereitung (Küche)":
                         st.write(f"⏱️ Ready in cca. {minuten_pripravy} Minuten.")
+                        if st.button("🔄 Aktualisieren", key=f"refresh_{doc_name}"): st.rerun()
                     elif status == "Ready for Pick-up":
                         st.write("Das Essen wartet verpackt an der Theke!")
                         if st.button("👍 Abholung an der Theke bestätigen", key=f"pick_{doc_name}", type="primary", use_container_width=True):
