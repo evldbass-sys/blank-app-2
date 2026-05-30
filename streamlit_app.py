@@ -1,36 +1,55 @@
-Import streamlit as st
+import streamlit as st
 import requests
 import json
 import time
 from datetime import datetime
-# Importujeme auto-refresh knihovnu
 from streamlit_autorefresh import st_autorefresh
 
 # ====== FIREBASE SETTINGS ======
 PROJECT_ID = "volt-a-value" 
 FIRESTORE_URL = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents"
 
-st.set_page_config(page_title="Lieferdienst Management System", layout="wide")
+# TRVALE OTEVŘENÝ PANEL PRO SNADNÉ PŘEPÍNÁNÍ PŘI TESTOVÁNÍ
+st.set_page_config(page_title="Volt and value - Lieferdienst Steyr", layout="wide", initial_sidebar_state="expanded")
+
+# Čistý vzhled: Schování systémových lišt a patiček Streamlitu
+st.markdown("""
+    <style>
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        .stButton>button {
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        .stRadio>div {
+            flex-direction: row;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # ====== DATABASE FUNCTIONS ======
 def naechste_bestellnummer_holen():
-    url = f"{FIRESTORE_URL}/objednavky"
-    res = requests.get(url)
-    max_nr = 0
-    if res.status_code == 200 and "documents" in res.json():
-        for d in res.json()["documents"]:
-            f = d.get("fields", {})
-            if "cislo_objednavky" in f:
-                try:
-                    nr = int(f["cislo_objednavky"]["stringValue"])
-                    if nr > max_nr:
-                        max_nr = nr
-                except:
-                    pass
-    naechste = max_nr + 1
-    if naechste > 9999:
-        naechste = 1
-    return naechste
+    try:
+        url = f"{FIRESTORE_URL}/objednavky"
+        res = requests.get(url)
+        max_nr = 0
+        if res.status_code == 200 and "documents" in res.json():
+            for d in res.json()["documents"]:
+                f = d.get("fields", {})
+                if "cislo_objednavky" in f:
+                    try:
+                        nr = int(f["cislo_objednavky"]["stringValue"])
+                        if nr > max_nr:
+                            max_nr = nr
+                    except:
+                        pass
+        naechste = max_nr + 1
+        if naechste > 9999:
+            naechste = 1
+        return naechste
+    except:
+        return 1
 
 def bestellung_speichern(daten):
     url = f"{FIRESTORE_URL}/objednavky"
@@ -62,21 +81,26 @@ def alle_bestellungen_loeschen():
     for d in docs:
         requests.delete(f"https://firestore.googleapis.com/v1/{d['name']}")
 
-# ====== NAVIGATION ======
-rolle = st.sidebar.radio("Bereich auswählen:", [
-    "🏠 1. Kunden-Ansicht (Bestellung von zu Hause)", 
-    "🏬 2. Kassa / Eingabe (Theke)",
-    "👨‍🍳 3. Küche Monitor", 
-    "🚗 4. Fahrer-Ansicht (Mobil & Finanzen)"
-])
+# ====== INITIALIZACE PAMĚTI V SESSION STATE ======
+if "kunden_korb_liste" not in st.session_state: st.session_state.kunden_korb_liste = []
+if "rest_korb_liste" not in st.session_state: st.session_state.rest_korb_liste = []
+if "gewaehltes_rest_kunde" not in st.session_state: st.session_state.gewaehltes_rest_kunde = None
+if "gewaehltes_rest_kassa" not in st.session_state: st.session_state.gewaehltes_rest_kassa = "Smash Brothers"
+if "aktiver_korb_rest" not in st.session_state: st.session_state.aktiver_korb_rest = None
 
-# ====== MULTI-RESTAURANT MENUE STRUCTURE ======
+# ====== MULTI-RESTAURANT & SUPERMARKET STRUCTURE ======
 url_burger = "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500&auto=format&fit=crop&q=60"
 url_chicken = "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=500&auto=format&fit=crop&q=60"
 url_wrap = "https://images.unsplash.com/photo-1626700051175-6518c4793f4f?w=500&auto=format&fit=crop&q=60"
 url_kebab = "https://images.unsplash.com/photo-1628258475456-0224b1e4225a?w=500&auto=format&fit=crop&q=60"
 url_pizza = "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=500&auto=format&fit=crop&q=60"
 url_schnitzel = "https://images.unsplash.com/photo-1599921841143-819065a55cc6?w=500&auto=format&fit=crop&q=60"
+
+url_wasser = "https://images.unsplash.com/photo-1608889174637-3c44f6326f60?w=500&auto=format&fit=crop&q=60"
+url_milch = "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=500&auto=format&fit=crop&q=60"
+url_brot = "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=500&auto=format&fit=crop&q=60"
+url_energy = "https://images.unsplash.com/photo-1622543953495-a17ebd37933f?w=500&auto=format&fit=crop&q=60"
+url_bier = "https://images.unsplash.com/photo-1608270586620-248524c67de9?w=500&auto=format&fit=crop&q=60"
 
 restaurants_menue = {
     "Smash Brothers": {
@@ -104,6 +128,22 @@ restaurants_menue = {
         "Pizza Tonno": {"preis": 10.20, "icon": "🍕", "kat": "Pizza", "extras": False, "bild": url_pizza},
         "Pizza Quattro Formaggi": {"preis": 10.90, "icon": "🍕", "kat": "Pizza", "extras": False, "bild": url_pizza},
         "Wiener Schnitzel (vom Schwein)": {"preis": 11.50, "icon": "🥩", "kat": "Schnitzel", "extras": False, "bild": url_schnitzel}
+    },
+    "Billa": {
+        "Clever Minerální voda (6x1.5L)": {"preis": 3.90, "icon": "💧", "kat": "Getränke", "extras": False, "bild": url_wasser},
+        "Red Bull Energy Drink 250ml": {"preis": 2.20, "icon": "⚡", "kat": "Getränke", "extras": False, "bild": url_energy},
+        "Gösser Märzen Pivo (6-pack)": {"preis": 6.90, "icon": "🍺", "kat": "Alkohol", "extras": False, "bild": url_bier},
+        "Toastbrot 500g": {"preis": 1.90, "icon": "🍞", "kat": "Lebensmittel", "extras": False, "bild": url_brot}
+    },
+    "Penny": {
+        "Penny Trvanlivé mléko 1L": {"preis": 1.45, "icon": "🥛", "kat": "Lebensmittel", "extras": False, "bild": url_milch},
+        "Monster Energy Green 500ml": {"preis": 2.50, "icon": "💥", "kat": "Getränke", "extras": False, "bild": url_energy},
+        "Wieselburger Bier (6-pack)": {"preis": 6.50, "icon": "🍺", "kat": "Alkohol", "extras": False, "bild": url_bier}
+    },
+    "Hofer": {
+        "Zurück zum Ursprung Bio-Milch 1L": {"preis": 1.85, "icon": "🥛", "kat": "Lebensmittel", "extras": False, "bild": url_milch},
+        "Žitný chléb krájený 500g": {"preis": 2.40, "icon": "🍞", "kat": "Lebensmittel", "extras": False, "bild": url_brot},
+        "Flying Power Energy 250ml": {"preis": 0.90, "icon": "⚡", "kat": "Getränke", "extras": False, "bild": url_energy}
     }
 }
 
@@ -119,7 +159,7 @@ def rendering_menue_grid(aktive_rest, session_key):
     kategorien = list(set(info["kat"] for info in aktuelle_speisekarte.values()))
     
     for kat in sorted(kategorien):
-        st.markdown(f"#### ++ {kat} ++")
+        st.markdown(f"#### 📦 {kat}")
         items = [item for item in aktuelle_speisekarte.items() if item[1]["kat"] == kat]
         for i in range(0, len(items), 3):
             cols = st.columns(3)
@@ -129,10 +169,10 @@ def rendering_menue_grid(aktive_rest, session_key):
                     with cols[j]:
                         with st.container(border=True):
                             if "bild" in info:
-                                st.image(info["bild"], use_container_width=True)
+                                st.image(info["bild"], width="stretch")
                                 
                             st.markdown(f"**{info['icon']} {artikel}**")
-                            st.markdown(f"Price: {info['preis']:.2f} €")
+                            st.markdown(f"Cena: **{info['preis']:.2f} €**")
                             
                             selected_extras = []
                             extra_cost = 0.0
@@ -144,7 +184,8 @@ def rendering_menue_grid(aktive_rest, session_key):
                                             extra_cost += ex_preis
                             
                             st.write("")
-                            if st.button("➕ Hinzufügen", key=f"{session_key}_{aktive_rest}_btn_{artikel}", use_container_width=True):
+                            # UPDATE 2026: use_container_width nahrazeno za width="stretch"
+                            if st.button("➕ Hinzufügen", key=f"{session_key}_{aktive_rest}_btn_{artikel}", width="stretch"):
                                 název_polozky = artikel
                                 if selected_extras:
                                     název_polozky += f" ({', '.join(selected_extras)})"
@@ -152,124 +193,149 @@ def rendering_menue_grid(aktive_rest, session_key):
                                 final_preis = info["preis"] + extra_cost
                                 st.session_state[f"{session_key}_liste"].append({"name": název_polozky, "preis": final_preis})
                                 st.success("Hinzugefügt!")
-                                time.sleep(0.2)
+                                time.sleep(0.1)
                                 st.rerun()
 
-if "kunden_korb_liste" not in st.session_state: st.session_state.kunden_korb_liste = []
-if "rest_korb_liste" not in st.session_state: st.session_state.rest_korb_liste = []
-if "gewaehltes_rest_kunde" not in st.session_state: st.session_state.gewaehltes_rest_kunde = None
-if "gewaehltes_rest_kassa" not in st.session_state: st.session_state.gewaehltes_rest_kassa = "Smash Brothers"
-if "aktiver_korb_rest" not in st.session_state: st.session_state.aktiver_korb_rest = None
+# ====== ROZCESTNÍK NAVIGACE V BOČNÍM PANELU ======
+st.sidebar.title("🎛️ Administrace systému")
+rolle = st.sidebar.radio("Zvolte sekci rozhraní:", [
+    "🏠 1. Kunden-Ansicht (E-Shop)", 
+    "🏬 2. Kassa / Pokladna",
+    "👨‍🍳 3. Küche Monitor", 
+    "🚗 4. Fahrer-Ansicht (Mobil & Finanzen)"
+])
 
-# ====== 1. KUNDEN-ANSICHT (Bez auto-refreshe, aby neblikala při výběru) ======
-if rolle == "🏠 1. Kunden-Ansicht (Bestellung von zu Hause)":
-    st.header("🚚 Online-Bestellung – Restaurant wählen")
+# ====== 1. KUNDEN-ANSICHT (ZÁKAZNICKÝ E-SHOP) ======
+if rolle == "🏠 1. Kunden-Ansicht (E-Shop)":
+    st.title("🍔 Volt and value - Lieferdienst Steyr")
+    st.markdown("##### Expresní rozvoz z nejlepších restaurací a supermarketů ve městě")
+    st.write("")
     
-    c_rest1, c_rest2 = st.columns(2)
-    with c_rest1:
-        if st.button("🍔 SMASH BROTHERS", use_container_width=True, type="primary" if st.session_state.gewaehltes_rest_kunde == "Smash Brothers" else "secondary"):
-            if st.session_state.kunden_korb_liste and st.session_state.aktiver_korb_rest != "Smash Brothers":
-                st.session_state.wunsch_rest = "Smash Brothers"
-            else:
-                st.session_state.gewaehltes_rest_kunde = "Smash Brothers"
-                st.rerun()
-                
-    with c_rest2:
-        if st.button("🥙 KING FOOD (Kebab & Pizza)", use_container_width=True, type="primary" if st.session_state.gewaehltes_rest_kunde == "King Food" else "secondary"):
-            if st.session_state.kunden_korb_liste and st.session_state.aktiver_korb_rest != "King Food":
-                st.session_state.wunsch_rest = "King Food"
-            else:
-                st.session_state.gewaehltes_rest_kunde = "King Food"
-                st.rerun()
+    st.markdown("### 🏪 Zvolte obchod nebo restauraci:")
+    
+    c_res = st.columns(5)
+    names_buttons = ["Smash Brothers", "King Food", "Billa", "Penny", "Hofer"]
+    icons_buttons = ["🍔 Smash Brothers", "🥙 King Food", "🛍️ Billa", "🛍️ Penny", "🛍️ Hofer"]
+    
+    for idx, r_name in enumerate(names_buttons):
+        with c_res[idx]:
+            is_active = st.session_state.gewaehltes_rest_kunde == r_name
+            if st.button(icons_buttons[idx], key=f"cust_btn_{r_name}", width="stretch", type="primary" if is_active else "secondary"):
+                if st.session_state.kunden_korb_liste and st.session_state.aktiver_korb_rest != r_name:
+                    st.session_state.wunsch_rest = r_name
+                else:
+                    st.session_state.gewaehltes_rest_kunde = r_name
+                    st.rerun()
             
     st.write("---")
     
     if "wunsch_rest" in st.session_state and st.session_state.wunsch_rest is not None:
         with st.container(border=True):
-            st.error(f"🛑 Achtung! Du hast bereits Artikel von **{st.session_state.aktiver_korb_rest}** im Warenkorb.")
-            st.write("Ein Mischen von verschiedenen Restaurants in einer Bestellung ist nicht möglich.")
+            st.error(f"🛑 Pozor! Máte v košíku položky z: **{st.session_state.aktiver_korb_rest}**.")
+            st.write("Není možné míchat jídla a nákupy z různých míst v jedné objednávce kvůli logistice kurýrů.")
             c_clear1, c_clear2 = st.columns(2)
-            if c_clear1.button("🗑️ Warenkorb leeren & wechseln", type="primary", use_container_width=True):
+            if c_clear1.button("🗑️ Vymazat košík a přejít jinam", type="primary", width="stretch"):
                 st.session_state.kunden_korb_liste = []
                 st.session_state.aktiver_korb_rest = None
                 st.session_state.gewaehltes_rest_kunde = st.session_state.wunsch_rest
                 st.session_state.wunsch_rest = None
                 st.rerun()
-            if c_clear2.button("❌ Abbrechen", use_container_width=True):
+            if c_clear2.button("❌ Zrušit změnu", width="stretch"):
                 st.session_state.wunsch_rest = None
                 st.rerun()
                 
     if st.session_state.gewaehltes_rest_kunde is None:
-        st.info("Bitte wählen Sie oben ein Restaurant aus.")
+        st.info("Pro zobrazení nabídky si prosím nahoře kliknutím vyberte restauraci nebo supermarket.")
     else:
-        st.subheader(f"Speisekarte von: {st.session_state.gewaehltes_rest_kunde}")
         col1, col2 = st.columns([2, 1])
         
         with col1:
+            st.subheader(f"📋 Nabídka: {st.session_state.gewaehltes_rest_kunde}")
             l_vorher = len(st.session_state.kunden_korb_liste)
             rendering_menue_grid(st.session_state.gewaehltes_rest_kunde, "kunden_korb")
             if len(st.session_state.kunden_korb_liste) > l_vorher:
                 st.session_state.aktiver_korb_rest = st.session_state.gewaehltes_rest_kunde
 
         with col2:
-            st.subheader("📋 Meine Bestellung")
+            st.subheader("🛒 Váš nákupní košík")
             gesamtsumme = 0.0
             artikel_strings = []
             
             if not st.session_state.kunden_korb_liste:
-                st.info("Dein Warenkorb ist leer.")
+                st.info("Košík je prázdný. Přidejte položky z nabídky vlevo.")
             else:
-                st.caption(f"Bestellung von: {st.session_state.aktiver_korb_rest}")
+                st.caption(f"Odesíláte objednávku z: {st.session_state.aktiver_korb_rest}")
                 for idx, item in enumerate(st.session_state.kunden_korb_liste):
                     st.text(f"• {item['name']} = {item['preis']:.2f} €")
                     gesamtsumme += item["preis"]
                     artikel_strings.append(item["name"])
                     
-                if st.button("🧹 Korb leeren", key="clear_kunden"):
+                if st.button("🧹 Vyčistit košík", key="clear_kunden", width="stretch"):
                     st.session_state.kunden_korb_liste = []
                     st.session_state.aktiver_korb_rest = None
                     st.rerun()
                     
             st.write("---")
-            st.metric("Gesamtsumme", f"{gesamtsumme:.2f} €")
-            k_trinkgeld = st.number_input("Trinkgeld für den Fahrer (€)", min_value=0.0, max_value=20.0, value=0.0, step=0.5, key="k_trinkgeld")
-            k_name = st.text_input("Name", "Max Mustermann", key="k_name")
-            k_telefon = st.text_input("Telefonnummer", "+43 660 1234567", key="k_tel")
-            k_adresse = st.text_input("Lieferadresse", "Hauptstraße 12, Steyr", key="k_adr")
-            k_zahlung = st.selectbox("Zahlungsart", ["Online-Karte", "Barzahlung"], key="k_zahl")
+            
+            if st.session_state.aktiver_korb_rest in ["Billa", "Penny", "Hofer"]:
+                liefergebuehr = 4.90 if st.session_state.kunden_korb_liste else 0.0
+            else:
+                liefergebuehr = 3.90 if st.session_state.kunden_korb_liste else 0.0
+                
+            endbetrag = gesamtsumme + liefergebuehr
+            
+            st.text(f"Mezisoučet položky: {gesamtsumme:.2f} €")
+            st.text(f"Doprava (Liefergebühr): {liefergebuehr:.2f} €")
+            st.markdown(f"### **Celková cena: {endbetrag:.2f} €**")
+            
+            st.write("---")
+            st.markdown("#### 📍 Údaje pro doručení")
+            k_name = st.text_input("Jméno a příjmení", "Max Mustermann")
+            k_telefon = st.text_input("Telefonní číslo", "+43 ")
+            k_adresse = st.text_input("Adresa doručení v Steyru", "Hauptstraße 12, Steyr")
+            k_zahlung = st.selectbox("Způsob platby", ["💳 Online platební karta (Stripe)", "💵 Hotovost při převzetí"])
+            k_trinkgeld = st.number_input("Trinkgeld pro řidiče (€)", min_value=0.0, max_value=20.0, value=0.0, step=0.5)
             
             if st.session_state.kunden_korb_liste:
-                if st.button("🚀 BESTELLUNG ABSENDEN", type="primary", use_container_width=True):
-                    neue_bestellung = {
-                        "restaurant": st.session_state.aktiver_korb_rest,
-                        "obsah": ", ".join(artikel_strings),
-                        "cena": f"{gesamtsumme:.2f}",
-                        "platba": k_zahlung,
-                        "adresa": f"{k_adresse} | Kunde: {k_name} | Tel: {k_telefon}",
-                        "stav": "Wartet auf Bestätigung durch Kassa",
-                        "kuryr": "Petr (Auto)",
-                        "cas": datetime.now().strftime("%H:%M:%S"),
-                        "dysko": f"{k_trinkgeld:.2f}",
-                        "cas_pripravy": "10"
-                    }
-                    bestellung_speichern(neue_bestellung)
-                    st.session_state.kunden_korb_liste = []
-                    st.session_state.aktiver_korb_rest = None
-                    st.success("🎉 Abgesendet!")
-                    st.rerun()
+                if st.button("🚀 ZÁVAZNĚ OBJEDNAT A ZAPLATIT", type="primary", width="stretch"):
+                    if not k_name or not k_adresse or len(k_telefon) < 8:
+                        st.error("Prosím vyplňte kompletní údaje pro kurýra včetně správného telefonu!")
+                    else:
+                        if k_zahlung == "💳 Online platební karta (Stripe)":
+                            with st.spinner("Zabezpečená autorizace karty na platební bráně Stripe..."):
+                                time.sleep(1.5)
+                            st.success(f"💳 Platba {endbetrag:.2f} € byla úspěšně zpracována!")
+                            
+                        neue_bestellung = {
+                            "restaurant": st.session_state.aktiver_korb_rest,
+                            "obsah": ", ".join(artikel_strings),
+                            "cena": f"{gesamtsumme:.2f}",
+                            "platba": "Platba kartou (Stripe)" if k_zahlung == "💳 Online platební karta (Stripe)" else "Barzahlung",
+                            "adresa": f"{k_adresse} | Kunde: {k_name} | Tel: {k_telefon}",
+                            "stav": "Wartet auf Bestätigung durch Kassa",
+                            "kuryr": "Petr (Auto)",
+                            "cas": datetime.now().strftime("%H:%M:%S"),
+                            "dysko": f"{k_trinkgeld:.2f}",
+                            "cas_pripravy": "10"
+                        }
+                        bestellung_speichern(neue_bestellung)
+                        st.session_state.kunden_korb_liste = []
+                        st.session_state.aktiver_korb_rest = None
+                        st.balloons()
+                        st.success("🎉 Objednávka byla úspěšně odeslána do systému!")
+                        time.sleep(1.5)
+                        st.rerun()
 
-# ====== 2. KASSA / EINGABE (AUTOREFRESH 5 VTEŘIN) ======
-elif rolle == "🏬 2. Kassa / Eingabe (Theke)":
-    # STRÁNKA SE KAŽDÝCH 5 VTEŘIN SAMA AKTUALIZUJE V CLOUDU
+# ====== 2. KASSA / POKLADNA ======
+elif rolle == "🏬 2. Kassa / Pokladna":
     st_autorefresh(interval=5 * 1000, key="kassa_autorefresh")
+    st.header("🏬 Kassa & Správa objednávek")
     
-    st.header("🏬 Kassa & Auftragsannahme")
     docs = bestellungen_laden()
-    
     if "zeit_online" not in st.session_state: st.session_state.zeit_online = {}
     if "zeit_manuell" not in st.session_state: st.session_state.zeit_manuell = 10
 
-    st.subheader("🔔 Eingehende ONLINE-Bestellungen")
+    st.subheader("🔔 Nové online objednávky ke schválení")
     online_gefunden = False
     for d in docs:
         f = d["fields"]
@@ -285,11 +351,11 @@ elif rolle == "🏬 2. Kassa / Eingabe (Theke)":
             with st.container(border=True):
                 col_o1, col_o2, col_o3 = st.columns([2, 1, 1])
                 with col_o1:
-                    st.markdown(f"### 📦 ORDER #{int(nr_obj):04d} ({r_von})")
-                    st.markdown(f"**Inhalt:** {f['obsah']['stringValue']} ({f['cena']['stringValue']} €)")
-                    st.text(f"📍 {f['adresa']['stringValue']} | Zeit: {f['cas']['stringValue']}")
+                    st.markdown(f"### 📦 OBJEDNÁVKA #{int(nr_obj):04d} ({r_von})")
+                    st.markdown(f"**Obsah:** {f['obsah']['stringValue']} ({f['cena']['stringValue']} €)")
+                    st.text(f"📍 {f['adresa']['stringValue']} | Čas: {f['cas']['stringValue']}")
                 with col_o2:
-                    st.markdown(f"⏱️ **Zubereitungszeit:** `{st.session_state.zeit_online[doc_name]} Min`")
+                    st.markdown(f"⏱️ **Čas přípravy:** `{st.session_state.zeit_online[doc_name]} Min`")
                     zc1, zc2 = st.columns(2)
                     if zc1.button("➕ 5 Min", key=f"p5_on_{doc_name}"): 
                         st.session_state.zeit_online[doc_name] += 5
@@ -299,15 +365,15 @@ elif rolle == "🏬 2. Kassa / Eingabe (Theke)":
                             st.session_state.zeit_online[doc_name] -= 5
                             st.rerun()
                 with col_o3:
-                    if st.button("✔️ Bestätigen & Küche", key=f"prij_online_{doc_name}", type="primary", use_container_width=True):
+                    if st.button("✔️ Schválit do kuchyně", key=f"prij_online_{doc_name}", type="primary", width="stretch"):
                         bestellstatus_aktualisieren(doc_name, "In Zubereitung (Küche)", "Petr (Auto)", f["adresa"]["stringValue"], st.session_state.zeit_online[doc_name])
                         st.rerun()
                         
-    if not online_gefunden: st.info("Keine neuen Online-Bestellungen.")
+    if not online_gefunden: st.info("Žádné nové online objednávky nečekají.")
         
     st.write("---")
-    st.subheader("✍️ Manuelle Bestelleingabe (Telefon / Tresen)")
-    st.session_state.gewaehltes_rest_kassa = st.selectbox("Restaurant für die Eingabe:", ["Smash Brothers", "King Food"])
+    st.subheader("✍️ Manuální zadání (Telefon / Pult)")
+    st.session_state.gewaehltes_rest_kassa = st.selectbox("Vyberte provozovnu:", ["Smash Brothers", "King Food", "Billa", "Penny", "Hofer"])
     
     col_kassa_1, col_kassa_2 = st.columns([2, 1])
     with col_kassa_1:
@@ -317,25 +383,25 @@ elif rolle == "🏬 2. Kassa / Eingabe (Theke)":
         r_summe = 0.0
         r_artikel_strings = []
         if not st.session_state.rest_korb_liste:
-            st.info("Kassa-Beleg leer.")
+            st.info("Pultový lístek je prázdný.")
         else:
             for item in st.session_state.rest_korb_liste:
                 st.text(f"• {item['name']} = {item['preis']:.2f} €")
                 r_summe += item["preis"]
                 r_artikel_strings.append(item["name"])
                 
-            if st.button("🧹 Beleg leeren", key="clear_rest"):
+            if st.button("🧹 Vymazat lístek", key="clear_rest", width="stretch"):
                 st.session_state.rest_korb_liste = []
                 st.rerun()
                 
         st.write("---")
-        st.metric("Gesamtsumme", f"{r_summe:.2f} €")
-        r_name = st.text_input("Kundenname", "Telefonischer Kunde", key="r_name")
-        r_tel = st.text_input("Telefonnummer (Kunde)", "+43 ", key="r_tel")
-        r_adresse = st.text_input("Lieferadresse", "Ennser Straße 5, Steyr", key="r_adr")
-        r_zahlung = st.selectbox("Zahlungsart", ["Barzahlung", "Online-Karte"], key="r_zahl")
+        st.metric("Celkem za zboží", f"{r_summe:.2f} €")
+        r_name = st.text_input("Jméno zákazníka", "Zákazník na telefonu", key="r_name")
+        r_tel = st.text_input("Telefon", "+43 ", key="r_tel")
+        r_adresse = st.text_input("Adresa", "Ennser Straße 5, Steyr", key="r_adr")
+        r_zahlung = st.selectbox("Platba", ["Barzahlung", "Online-Karte"], key="r_zahl")
         
-        st.markdown(f"⏱️ **Zubereitungszeit pro Küche:** `{st.session_state.zeit_manuell} Min`")
+        st.markdown(f"⏱️ **Čas doručení/přípravy:** `{st.session_state.zeit_manuell} Min`")
         mc1, mc2 = st.columns(2)
         if mc1.button("➕ 5 Min", key="p5_man"): 
             st.session_state.zeit_manuell += 5
@@ -345,9 +411,9 @@ elif rolle == "🏬 2. Kassa / Eingabe (Theke)":
                 st.session_state.zeit_manuell -= 5
                 st.rerun()
                 
-        if st.button("📥 DIREKT IN DIE KÜCHE SENDEN", type="primary", use_container_width=True):
+        if st.button("📥 ODESLAT ROVNOU DO KUCHYNĚ / KURÝROVI", type="primary", width="stretch"):
             if not r_artikel_strings:
-                st.error("Warenkorb leer!")
+                st.error("Prázdný nákup!")
             else:
                 neue_bestellung = {
                     "restaurant": st.session_state.gewaehltes_rest_kassa,
@@ -364,23 +430,21 @@ elif rolle == "🏬 2. Kassa / Eingabe (Theke)":
                 bestellung_speichern(neue_bestellung)
                 st.session_state.rest_korb_liste = []
                 st.session_state.zeit_manuell = 10
-                st.success("Erfolgreich in die Küche gesendet!")
+                st.success("Odesláno na přípravu!")
                 st.rerun()
 
     st.write("---")
-    if st.button("🗑️ Gesamte Cloud-Historie löschen"): 
+    if st.button("🗑️ Resetovat a smazat celou databázi historie"): 
         alle_bestellungen_loeschen()
         st.rerun()
 
-# ====== 3. KÜCHE MONITOR (AUTOREFRESH 5 VTEŘIN) ======
+# ====== 3. KÜCHE MONITOR ======
 elif rolle == "👨‍🍳 3. Küche Monitor":
-    # KUCHYŇ SE AKTUALIZUJE SAMA KAŽDÝCH 5 VTEŘIN, KUCHAŘ NEMUSÍ SAHAT NA TABLET
     st_autorefresh(interval=5 * 1000, key="kueche_autorefresh")
+    st.header("👨‍🍳 Monitor v kuchyni a expedici (Küche Monitor)")
     
-    st.header("👨‍🍳 Monitor v kuchyni (Küche Monitor)")
     docs = bestellungen_laden()
     offene_kueche = False
-    
     cols_kueche = st.columns(3)
     k_idx = 0
     
@@ -388,9 +452,9 @@ elif rolle == "👨‍🍳 3. Küche Monitor":
         f = d["fields"]
         status = f["stav"]["stringValue"]
         doc_name = d["name"]
-        
         nr_obj = f.get("cislo_objednavky", {}).get("stringValue", "0")
         r_von = f.get("restaurant", {}).get("stringValue", "Smash Brothers")
+        
         try:
             label_bon = f"BON #{int(nr_obj):04d}"
         except:
@@ -404,7 +468,7 @@ elif rolle == "👨‍🍳 3. Küche Monitor":
                         f'<div style="background-color: #ffffff; border: 2px solid #333333; padding: 15px; border-radius: 4px; font-family: monospace; color: #000000 !important;">'
                         f'<h3 style="text-align: center; color: #e91e63 !important; margin: 0;">{label_bon}</h3>'
                         f'<p style="text-align: center; color: #333333 !important; font-weight: bold; margin: 2px 0;">{r_von}</p>'
-                        f'<p style="text-align: center; color: #555555 !important; margin: 5px 0;">Zeit: {f["cas"]["stringValue"]}</p>'
+                        f'<p style="text-align: center; color: #555555 !important; margin: 5px 0;">Čas: {f["cas"]["stringValue"]}</p>'
                         f'<hr style="border-top: 1px dashed #333333;">',
                         unsafe_allow_html=True
                     )
@@ -415,29 +479,27 @@ elif rolle == "👨‍🍳 3. Küche Monitor":
                     
                     st.markdown(
                         f'<hr style="border-top: 1px dashed #333333;">'
-                        f'<p style="color: #000000 !important; margin: 0;"><b>Kassa:</b> {f["platba"]["stringValue"]}</p>'
+                        f'<p style="color: #000000 !important; margin: 0;"><b>Typ:</b> {f["platba"]["stringValue"]}</p>'
                         f'</div>',
                         unsafe_allow_html=True
                     )
                     st.write("")
                     
-                    if st.button(f"✅ READY / HOTOVO ({label_bon})", key=f"hotovo_kuch_{doc_name}", type="primary", use_container_width=True):
+                    if st.button(f"✅ READY / EXPEDICE ({label_bon})", key=f"hotovo_kuch_{doc_name}", type="primary", width="stretch"):
                         c_prip = f.get("cas_pripravy", {}).get("stringValue", "10")
                         bestellstatus_aktualisieren(doc_name, "Ready for Pick-up", "Petr (Auto)", f["adresa"]["stringValue"], c_prip)
-                        st.success(f"{label_bon} FERTIG!")
-                        time.sleep(0.3)
+                        st.success(f"{label_bon} HOTOVO!")
+                        time.sleep(0.2)
                         st.rerun()
             k_idx += 1
             
     if not offene_kueche:
-        st.info("Aktuell keine Bestellungen in der Küche. Gute Arbeit! ✨")
+        st.info("Všechny zakázky jsou hotové. V kuchyni je čisto! ✨")
 
-# ====== 4. FAHRER-ANSICHT (AUTOREFRESH 5 VTEŘIN) ======
+# ====== 4. FAHRER-ANSICHT ======
 elif rolle == "🚗 4. Fahrer-Ansicht (Mobil & Finanzen)":
-    # KURIER MÁ V AUTĚ AUTO-REFRESH KAŽDÝCH 5 VTEŘIN, ABY HNED VIDĚL ZMĚNY STAVU
     st_autorefresh(interval=5 * 1000, key="fahrer_autorefresh")
-    
-    st.header("Kurier-App (Unterwegs)")
+    st.header("Kurier-App (Rozvoz Volt and value)")
     fahrer_name = "Petr (Auto)"
     
     if "bargeld_eur" not in st.session_state:
@@ -445,23 +507,23 @@ elif rolle == "🚗 4. Fahrer-Ansicht (Mobil & Finanzen)":
         st.session_state.provision_eur = 0.0
         st.session_state.trinkgeld_eur = 0.0
 
-    st.subheader("📊 Meine Finanzübersicht")
+    st.subheader("📊 Přehled mých financí na směně")
     c1, c2, c3 = st.columns(3)
-    with c1: st.metric("Meine Provision", f"{st.session_state.provision_eur:.2f} €")
-    with c2: st.metric("Erhaltenes Trinkgeld", f"{st.session_state.trinkgeld_eur:.2f} €")
-    with c3: st.metric("Bargeld (Limit 200€)", f"{st.session_state.bargeld_eur:.2f} / 200.00 €")
+    with c1: st.metric("Moje provize", f"{st.session_state.provision_eur:.2f} €")
+    with c2: st.metric("Vybrané spropitné (dýška)", f"{st.session_state.trinkgeld_eur:.2f} €")
+    with c3: st.metric("Hotovost u sebe (Limit 200€)", f"{st.session_state.bargeld_eur:.2f} / 200.00 €")
     st.write("---")
     
     if st.session_state.bargeld_eur >= 200.0:
-        st.error("🛑 BARGELDLIMIT ERREICHT! Du hast mehr als 200€ in bar.")
-        st.warning("⚠️ Fahre bitte sofort zur Hauptstation (Volt and value), um das Geld abzurechnen.")
-        if st.button("💰 Geld in der Hauptstation (Volt and value) odevzdáno", type="primary", use_container_width=True):
+        st.error("🛑 STOP! DOSÁHL JSI LIMITU 200 € V HOTOVOSTI.")
+        st.warning("⚠️ Z bezpečnostních důvodů musíš okamžitě jet odevzdat hotovost na centrálu Volt and value.")
+        if st.button("💰 Hotovost složena na centrále Volt and value", type="primary", width="stretch"):
             st.session_state.bargeld_eur = 0.0
-            st.success("Geld erfolgreich abgerechnet!")
+            st.success("Peníze bezpečně složeny, můžeš pokračovat v jízdách!")
             time.sleep(1)
             st.rerun()
     else:
-        st.subheader("Aktuelle Aufträge in der Pipeline")
+        st.subheader("Aktuální zakázky v mé pipeline")
         docs = bestellungen_laden()
         aktive_auftraege = []
         for d in docs:
@@ -472,7 +534,7 @@ elif rolle == "🚗 4. Fahrer-Ansicht (Mobil & Finanzen)":
                 pass
         
         if not aktive_auftraege:
-            st.info("Kein aktiver Auftrag. Warte auf die Kassa...")
+            st.info("Zatím žádná aktivní práce. Čekej na schválení na pokladně...")
         else:
             for d in aktive_auftraege:
                 f = d["fields"]
@@ -489,34 +551,33 @@ elif rolle == "🚗 4. Fahrer-Ansicht (Mobil & Finanzen)":
                     txt_nr = f"BON #{nr_obj}"
                 
                 if status == "Ready for Pick-up":
-                    st.success(f"🚨 DER KOCH WAR SCHNELLER! {txt_nr} ({r_von}) IST FERTIG!")
+                    st.success(f"🚨 KUCHYŇ NEBO OBCHOD MÁ HOTOVO! {txt_nr} ({r_von}) čeká na baru na vyzvednutí!")
                 elif status == "Auf dem Weg zum Kunden":
-                    st.info(f"🚚 AUF DEM WEG ZUM KUNDEN ({txt_nr})")
+                    st.info(f"🚚 VEZETE OBJEDNÁVKU ZÁKAZNÍKOVI ({txt_nr})")
                 else:
-                    st.warning(f"⏳ IN ZUBEREITUNG ({txt_nr} - {r_von})")
+                    st.warning(f"⏳ JÍDLO SE PŘIPRAVUJE / NÁKUP SE CHYSTÁ ({txt_nr} - {r_von})")
 
                 with st.container(border=True):
-                    st.markdown(f"**📍 Abholen bei:** `{r_von}`")
-                    st.write(f"🍱 **Inhalt:** {f['obsah']['stringValue']}")
-                    st.write(f"💶 **Zu kassieren:** {f['cena']['stringValue']} € ({f['platba']['stringValue']})")
-                    st.write(f"💰 **Trinkgeld:** {dysko_val} €")
+                    st.markdown(f"**📍 Místo vyzvednutí:** `{r_von}`")
+                    st.write(f"🍱 **Položky:** {f['obsah']['stringValue']}")
+                    st.write(f"💶 **Inkasovat od zákazníka:** {f['cena']['stringValue']} € ({f['platba']['stringValue']})")
+                    st.write(f"💰 **Dýško v aplikaci:** {dysko_val} €")
                     
                     if status == "In Zubereitung (Küche)":
-                        st.write(f"⏱️ Ready in cca. {minuten_pripravy} Minuten.")
-                        if st.button("🔄 Aktualisieren", key=f"refresh_{doc_name}"): st.rerun()
+                        st.write(f"⏱️ Připraveno bude za cca {minuten_pripravy} minut.")
                     elif status == "Ready for Pick-up":
-                        st.write("Das Essen wartet verpackt an der Theke!")
-                        if st.button("👍 Abholung an der Theke bestätigen", key=f"pick_{doc_name}", type="primary", use_container_width=True):
+                        st.write("Věci jsou sbalené na pultu / baru.")
+                        if st.button("👍 Potvrdit převzetí na baru / prodejně", key=f"pick_{doc_name}", type="primary", width="stretch"):
                             bestellstatus_aktualisieren(doc_name, "Auf dem Weg zum Kunden", fahrer_name, f["adresa"]["stringValue"], minuten_pripravy)
                             st.rerun()
                     elif status == "Auf dem Weg zum Kunden":
-                        st.write(f"➡️ **Wohin du fährst:** {f['adresa']['stringValue']}")
-                        if st.button("✅ Geliefert & Kassiert", key=f"deliver_{doc_name}", type="primary", use_container_width=True):
-                            st.session_state.provision_eur += 4.00
+                        st.write(f"➡️ **Adresa klienta:** `{f['adresa']['stringValue']}`")
+                        if st.button("✅ Doručeno & Inkasováno", key=f"deliver_{doc_name}", type="primary", width="stretch"):
+                            st.session_state.provision_eur += 6.50
                             st.session_state.trinkgeld_eur += float(dysko_val)
                             if f["platba"]["stringValue"] == "Barzahlung":
                                 st.session_state.bargeld_eur += float(f["cena"]["stringValue"])
                             bestellstatus_aktualisieren(doc_name, "Geliefert", fahrer_name, f["adresa"]["stringValue"], minuten_pripravy)
-                            st.success("Erfolgreich abgeschlossen!")
-                            time.sleep(0.5)
+                            st.success("Zakázka úspěšně uzavřena!")
+                            time.sleep(0.4)
                             st.rerun()
