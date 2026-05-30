@@ -3,50 +3,34 @@ import requests
 import json
 import time
 from datetime import datetime
+# Importujeme auto-refresh knihovnu
 from streamlit_autorefresh import st_autorefresh
 
 # ====== FIREBASE SETTINGS ======
 PROJECT_ID = "volt-a-value" 
 FIRESTORE_URL = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents"
 
-# Široké rozvržení, boční panel necháváme plně funkční pro přepínání rolí
-st.set_page_config(page_title="Lieferdienst Management System", layout="wide", initial_sidebar_state="auto")
-
-# Moderní CSS úprava pro čistější vzhled
-st.markdown("""
-    <style>
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
-        .stButton>button {
-            border-radius: 8px;
-            font-weight: bold;
-        }
-    </style>
-""", unsafe_allow_html=True)
+st.set_page_config(page_title="Lieferdienst Management System", layout="wide")
 
 # ====== DATABASE FUNCTIONS ======
 def naechste_bestellnummer_holen():
-    try:
-        url = f"{FIRESTORE_URL}/objednavky"
-        res = requests.get(url)
-        max_nr = 0
-        if res.status_code == 200 and "documents" in res.json():
-            for d in res.json()["documents"]:
-                f = d.get("fields", {})
-                if "cislo_objednavky" in f:
-                    try:
-                        nr = int(f["cislo_objednavky"]["stringValue"])
-                        if nr > max_nr:
-                            max_nr = nr
-                    except:
-                        pass
-        naechste = max_nr + 1
-        if naechste > 9999:
-            naechste = 1
-        return naechste
-    except:
-        return 1
+    url = f"{FIRESTORE_URL}/objednavky"
+    res = requests.get(url)
+    max_nr = 0
+    if res.status_code == 200 and "documents" in res.json():
+        for d in res.json()["documents"]:
+            f = d.get("fields", {})
+            if "cislo_objednavky" in f:
+                try:
+                    nr = int(f["cislo_objednavky"]["stringValue"])
+                    if nr > max_nr:
+                        max_nr = nr
+                except:
+                    pass
+    naechste = max_nr + 1
+    if naechste > 9999:
+        naechste = 1
+    return naechste
 
 def bestellung_speichern(daten):
     url = f"{FIRESTORE_URL}/objednavky"
@@ -78,7 +62,7 @@ def alle_bestellungen_loeschen():
     for d in docs:
         requests.delete(f"https://firestore.googleapis.com/v1/{d['name']}")
 
-# ====== NAVIGATION VIA SIDEBAR ======
+# ====== NAVIGATION ======
 rolle = st.sidebar.radio("Bereich auswählen:", [
     "🏠 1. Kunden-Ansicht (Bestellung von zu Hause)", 
     "🏬 2. Kassa / Eingabe (Theke)",
@@ -96,30 +80,30 @@ url_schnitzel = "https://images.unsplash.com/photo-1599921841143-819065a55cc6?w=
 
 restaurants_menue = {
     "Smash Brothers": {
-        "Cheese Burger": {"preis": 9.00, "icon": "🍔", "kat": "Smash Burger", "extras": True, "info": "Hovězí smash patty, cheddar, tajná omáčka, okurka", "bild": url_burger},
-        "Chili Cheese Burger": {"preis": 10.00, "icon": "🌶️", "kat": "Smash Burger", "extras": True, "info": "Pálivý jalapenos krém, cheddar, cibulka", "bild": url_burger},
-        "Double Trouble Burger": {"preis": 12.90, "icon": "🔥", "kat": "Smash Burger", "extras": True, "info": "Dva smash patíky pro pořádný hlad", "bild": url_burger},
-        "Oklahoma Double Burger": {"preis": 12.90, "icon": "🧅", "kat": "Smash Burger", "extras": True, "info": "Smashovaný s hromadou tenké cibulky", "bild": url_burger},
-        "Double Beast Burger": {"preis": 12.90, "icon": "👹", "kat": "Smash Burger", "extras": True, "info": "Masivní nálož masa a sýra", "bild": url_burger},
-        "Smash 'n' Egg": {"preis": 12.50, "icon": "🍳", "kat": "Smash Burger", "extras": True, "info": "Burger s volským okem a slaninou", "bild": url_burger},
-        "OG SMASH": {"preis": 10.00, "icon": "👑", "kat": "Smash Burger", "extras": True, "info": "Klasický americký smash burger", "bild": url_burger},
-        "Classic Chicken Burger": {"preis": 10.00, "icon": "🍗", "kat": "Smash Burger", "extras": True, "info": "Křupavé kuřecí prsíčko, majonéza, salát", "bild": url_chicken},
-        "Spicy Chicken Burger": {"preis": 10.00, "icon": "💥", "kat": "Smash Burger", "extras": True, "info": "Pikantní verze s chilli dresinkem", "bild": url_chicken},
-        "Green Dream Burger": {"preis": 10.00, "icon": "🌱", "kat": "Smash Burger", "extras": True, "info": "Vegetariánská verze s rostlinným patty", "bild": url_burger},
-        "Vegan Leaf Burger": {"preis": 10.00, "icon": "🍃", "kat": "Smash Burger", "extras": True, "info": "Kompletně veganský burger i houska", "bild": url_burger},
-        "Chicken Wrap": {"preis": 9.90, "icon": "🌯", "kat": "Wraps", "extras": False, "info": "Tortilla, kuřecí maso, zelenina, dresink", "bild": url_wrap},
-        "Beef Wrap": {"preis": 9.90, "icon": "🥩", "kat": "Wraps", "extras": False, "info": "Tortilla se šťavnatým hovězím masem", "bild": url_wrap},
-        "Green Wrap": {"preis": 9.90, "icon": "🥗", "kat": "Wraps", "extras": False, "info": "Lehký wrap plný čerstvé zeleniny a fety", "bild": url_wrap}
+        "Cheese Burger": {"preis": 9.00, "icon": "🍔", "kat": "Smash Burger", "extras": True, "bild": url_burger},
+        "Chili Cheese Burger": {"preis": 10.00, "icon": "🌶️", "kat": "Smash Burger", "extras": True, "bild": url_burger},
+        "Double Trouble Burger": {"preis": 12.90, "icon": "🔥", "kat": "Smash Burger", "extras": True, "bild": url_burger},
+        "Oklahoma Double Burger": {"preis": 12.90, "icon": "🧅", "kat": "Smash Burger", "extras": True, "bild": url_burger},
+        "Double Beast Burger": {"preis": 12.90, "icon": "👹", "kat": "Smash Burger", "extras": True, "bild": url_burger},
+        "Smash 'n' Egg": {"preis": 12.50, "icon": "🍳", "kat": "Smash Burger", "extras": True, "bild": url_burger},
+        "OG SMASH": {"preis": 10.00, "icon": "👑", "kat": "Smash Burger", "extras": True, "bild": url_burger},
+        "Classic Chicken Burger": {"preis": 10.00, "icon": "🍗", "kat": "Smash Burger", "extras": True, "bild": url_chicken},
+        "Spicy Chicken Burger": {"preis": 10.00, "icon": "💥", "kat": "Smash Burger", "extras": True, "bild": url_chicken},
+        "Green Dream Burger": {"preis": 10.00, "icon": "🌱", "kat": "Smash Burger", "extras": True, "bild": url_burger},
+        "Vegan Leaf Burger": {"preis": 10.00, "icon": "🍃", "kat": "Smash Burger", "extras": True, "bild": url_burger},
+        "Chicken Wrap": {"preis": 9.90, "icon": "🌯", "kat": "Wraps", "extras": False, "bild": url_wrap},
+        "Beef Wrap": {"preis": 9.90, "icon": "🥩", "kat": "Wraps", "extras": False, "bild": url_wrap},
+        "Green Wrap": {"preis": 9.90, "icon": "🥗", "kat": "Wraps", "extras": False, "bild": url_wrap}
     },
     "King Food": {
-        "Kebab Oriental": {"preis": 6.50, "icon": "🥙", "kat": "Kebab", "extras": False, "info": "Čerstvé maso, domácí chléb, bylinkový dresing", "bild": url_kebab},
-        "Kebab Spezial": {"preis": 7.20, "icon": "🌯", "kat": "Kebab", "extras": False, "info": "Dürüm kebab s extra porcí masa", "bild": url_wrap},
-        "Pizza Margherita": {"preis": 8.50, "icon": "🍕", "kat": "Pizza", "extras": False, "info": "Tomat, mozzarella, čerstvá bazalka", "bild": url_pizza},
-        "Pizza Salami": {"preis": 9.50, "icon": "🍕", "kat": "Pizza", "extras": False, "info": "Tomat, mozzarella, italský salám", "bild": url_pizza},
-        "Pizza Cardinale": {"preis": 9.90, "icon": "🍕", "kat": "Pizza", "extras": False, "info": "Klasická pizza se šunkou a žampiony", "bild": url_pizza},
-        "Pizza Tonno": {"preis": 10.20, "icon": "🍕", "kat": "Pizza", "extras": False, "info": "Tuňák, cibule, mozzarella", "bild": url_pizza},
-        "Pizza Quattro Formaggi": {"preis": 10.90, "icon": "🍕", "kat": "Pizza", "extras": False, "info": "Čtyři druhy lahodných sýrů", "bild": url_pizza},
-        "Wiener Schnitzel (vom Schwein)": {"preis": 11.50, "icon": "🥩", "kat": "Schnitzel", "extras": False, "info": "Tradiční vídeňský řízek s citrónem", "bild": url_schnitzel}
+        "Kebab Oriental": {"preis": 6.50, "icon": "🥙", "kat": "Kebab", "extras": False, "bild": url_kebab},
+        "Kebab Spezial": {"preis": 7.20, "icon": "🌯", "kat": "Kebab", "extras": False, "bild": url_wrap},
+        "Pizza Margherita": {"preis": 8.50, "icon": "🍕", "kat": "Pizza", "extras": False, "bild": url_pizza},
+        "Pizza Salami": {"preis": 9.50, "icon": "🍕", "kat": "Pizza", "extras": False, "bild": url_pizza},
+        "Pizza Cardinale": {"preis": 9.90, "icon": "🍕", "kat": "Pizza", "extras": False, "bild": url_pizza},
+        "Pizza Tonno": {"preis": 10.20, "icon": "🍕", "kat": "Pizza", "extras": False, "bild": url_pizza},
+        "Pizza Quattro Formaggi": {"preis": 10.90, "icon": "🍕", "kat": "Pizza", "extras": False, "bild": url_pizza},
+        "Wiener Schnitzel (vom Schwein)": {"preis": 11.50, "icon": "🥩", "kat": "Schnitzel", "extras": False, "bild": url_schnitzel}
     }
 }
 
@@ -148,7 +132,6 @@ def rendering_menue_grid(aktive_rest, session_key):
                                 st.image(info["bild"], use_container_width=True)
                                 
                             st.markdown(f"**{info['icon']} {artikel}**")
-                            st.caption(info.get("info", ""))
                             st.markdown(f"Price: {info['preis']:.2f} €")
                             
                             selected_extras = []
@@ -178,7 +161,7 @@ if "gewaehltes_rest_kunde" not in st.session_state: st.session_state.gewaehltes_
 if "gewaehltes_rest_kassa" not in st.session_state: st.session_state.gewaehltes_rest_kassa = "Smash Brothers"
 if "aktiver_korb_rest" not in st.session_state: st.session_state.aktiver_korb_rest = None
 
-# ====== 1. KUNDEN-ANSICHT (SUPER GASTRO DESIGN VEDLE SEBE) ======
+# ====== 1. KUNDEN-ANSICHT (Bez auto-refreshe, aby neblikala při výběru) ======
 if rolle == "🏠 1. Kunden-Ansicht (Bestellung von zu Hause)":
     st.header("🚚 Online-Bestellung – Restaurant wählen")
     
@@ -219,11 +202,10 @@ if rolle == "🏠 1. Kunden-Ansicht (Bestellung von zu Hause)":
     if st.session_state.gewaehltes_rest_kunde is None:
         st.info("Bitte wählen Sie oben ein Restaurant aus.")
     else:
-        # Tady děláme to přehledné rozdělení: 2 díly menu, 1 díl košík vpravo
+        st.subheader(f"Speisekarte von: {st.session_state.gewaehltes_rest_kunde}")
         col1, col2 = st.columns([2, 1])
         
         with col1:
-            st.subheader(f"Speisekarte von: {st.session_state.gewaehltes_rest_kunde}")
             l_vorher = len(st.session_state.kunden_korb_liste)
             rendering_menue_grid(st.session_state.gewaehltes_rest_kunde, "kunden_korb")
             if len(st.session_state.kunden_korb_liste) > l_vorher:
@@ -243,7 +225,7 @@ if rolle == "🏠 1. Kunden-Ansicht (Bestellung von zu Hause)":
                     gesamtsumme += item["preis"]
                     artikel_strings.append(item["name"])
                     
-                if st.button("🧹 Korb leeren", key="clear_kunden", use_container_width=True):
+                if st.button("🧹 Korb leeren", key="clear_kunden"):
                     st.session_state.kunden_korb_liste = []
                     st.session_state.aktiver_korb_rest = None
                     st.rerun()
@@ -273,7 +255,6 @@ if rolle == "🏠 1. Kunden-Ansicht (Bestellung von zu Hause)":
                     bestellung_speichern(neue_bestellung)
                     st.session_state.kunden_korb_liste = []
                     st.session_state.aktiver_korb_rest = None
-                    st.balloons()
                     st.success("🎉 Abgesendet!")
                     st.rerun()
 
@@ -477,7 +458,7 @@ elif rolle == "🚗 4. Fahrer-Ansicht (Mobil & Finanzen)":
             time.sleep(1)
             st.rerun()
     else:
-        st.subheader("Aktuelle Aufträge in der Pipeline")
+        st.subheader("Aktuální zakázky v mé pipeline")
         docs = bestellungen_laden()
         aktive_auftraege = []
         for d in docs:
